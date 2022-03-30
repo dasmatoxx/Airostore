@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model, authenticate
 from rest_framework import serializers
 
+from .models import Profile
 from .utils import send_activation_email
 
 User = get_user_model()
@@ -31,8 +32,9 @@ class RegisterSerializer(serializers.ModelSerializer):
         email = validated_data.get('email')
         password = validated_data.get('password')
         user = User.objects.create_user(email, password)
-        send_activation_email(user.email, user.activation_code)
+        send_activation_email.delay(user.email, user.activation_code)
         return user
+
 
 
 class LoginSerializer(serializers.Serializer):
@@ -56,3 +58,21 @@ class LoginSerializer(serializers.Serializer):
 
         validated_data['user'] = user
         return validated_data
+
+
+class ProfileSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = Profile
+        fields = '__all__'
+
+    def create(self, validated_data):
+        request = self.context.get('request')
+        validated_data['author_id'] = request.user.id
+        profile = Profile.objects.create(**validated_data)
+        return profile
+
+    def to_representation(self, instance):
+        rep = super().to_representation(instance)
+        rep['favorite'] = f'{[i.title for i in instance.favorite.all()]}'
+        return rep
